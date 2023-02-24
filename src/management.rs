@@ -8,13 +8,13 @@ use bevy_ecs::query::{With, Without};
 use bevy_ecs::system::{Commands, Query, Res, ResMut};
 use bevy_render::camera::{Camera, OrthographicProjection, RenderTarget};
 use bevy_render::texture::Image;
+use bevy_render::view::RenderLayers;
 use bevy_time::Time;
 use bevy_transform::components::Transform;
 
-use crate::data::ProjectToImage;
 use crate::data::{
-	ActiveRecorder, ActiveRecorders, HasTaskStatus, Recorder, RenderData, SharedDataSmuggler,
-	StartTrackingCamera, TextureFrame, Track,
+	ActiveRecorder, ActiveRecorders, HasTaskStatus, ProjectToImage, Recorder, RenderData,
+	SharedDataSmuggler, StartTrackingCamera, TextureFrame, Track,
 };
 
 pub fn sync_tracking_cameras(
@@ -105,10 +105,15 @@ pub fn start_tracking_orthographic_camera(
 	mut images: ResMut<Assets<Image>>,
 	mut smugglers: ResMut<SharedDataSmuggler>,
 	mut recorders: ResMut<ActiveRecorders>,
-	query: Query<(&Camera, &Transform, &OrthographicProjection)>,
+	query: Query<(
+		&Camera,
+		&Transform,
+		&OrthographicProjection,
+		Option<&RenderLayers>,
+	)>,
 ) {
 	for event in events.drain() {
-		if let Ok((camera, transform, ortho)) = query.get(event.cam_entity) {
+		if let Ok((camera, transform, ortho, layer)) = query.get(event.cam_entity) {
 			let target_image = ortho.project_to_image();
 			let target_handle = images.add(target_image);
 			let new_id = event.tracking_id;
@@ -125,9 +130,11 @@ pub fn start_tracking_orthographic_camera(
 				})
 				.insert(Recorder(event.tracking_id))
 				.insert(Track(event.cam_entity))
+				.insert(layer.copied().unwrap_or_default())
 				.id();
 
-			let mut smuggle = smugglers.0
+			let mut smuggle = smugglers
+				.0
 				.lock()
 				.expect("Smugglers have gone; Poisoned Mutex");
 
